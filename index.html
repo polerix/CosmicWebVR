@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>CosmicWeb VR - Google Cardboard Universe Explorer</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body, html {
+      width: 100%;
+      height: 100%;
+      background-color: #000003;
+      color: #e0f0ff;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+      overflow: hidden;
+    }
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    #vr-separator {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 2px;
+      height: 100vh;
+      background: rgba(255, 255, 255, 0.25);
+      transform: translateX(-50%);
+      z-index: 5;
+      pointer-events: none;
+      display: none;
+    }
+    #vr-alignment-notch {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 12px;
+      height: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      transform: translate(-50%, -50%);
+      z-index: 5;
+      pointer-events: none;
+      display: none;
+    }
+    #ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 16px;
+    }
+    .interactive {
+      pointer-events: auto;
+    }
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(5, 12, 24, 0.75);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(0, 200, 255, 0.25);
+      border-radius: 12px;
+      padding: 10px 18px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.8);
+    }
+    .brand-title {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #00f0ff;
+      text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand-title span {
+      font-size: 11px;
+      background: rgba(0, 240, 255, 0.15);
+      border: 1px solid rgba(0, 240, 255, 0.4);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #ffffff;
+    }
+    .controls-cluster {
+      display: flex;
+      gap: 10px;
+    }
+    .btn {
+      background: rgba(10, 30, 60, 0.8);
+      color: #e0f0ff;
+      border: 1px solid rgba(0, 200, 255, 0.4);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    .btn:hover {
+      background: rgba(0, 150, 255, 0.3);
+      border-color: #00f0ff;
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.5);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, rgba(0, 150, 255, 0.6), rgba(0, 80, 200, 0.8));
+      border-color: #00f0ff;
+      color: #ffffff;
+    }
+    .telemetry-panel {
+      position: absolute;
+      bottom: 24px;
+      left: 24px;
+      background: rgba(4, 10, 20, 0.8);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      border-left: 4px solid #00f0ff;
+      border-radius: 8px;
+      padding: 12px 18px;
+      max-width: 380px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .telemetry-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #00f0ff;
+      margin-bottom: 4px;
+    }
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 12px;
+      margin-top: 6px;
+      color: #90b8d8;
+    }
+    .telemetry-grid strong {
+      color: #ffffff;
+    }
+    .telemetry-status {
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(0, 200, 255, 0.2);
+      color: #ffb700;
+      font-weight: 600;
+    }
+    #start-modal, #settings-modal {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at center, rgba(10, 25, 50, 0.95) 0%, rgba(2, 5, 12, 0.98) 100%);
+      z-index: 100;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      pointer-events: auto;
+      backdrop-filter: blur(12px);
+    }
+    .modal-box, .settings-box {
+      max-width: 580px;
+      width: 90%;
+      background: rgba(6, 16, 34, 0.9);
+      border: 1px solid rgba(0, 240, 255, 0.4);
+      border-radius: 16px;
+      padding: 28px;
+      text-align: center;
+    }
+    .modal-box h1 {
+      font-size: 26px;
+      color: #00f0ff;
+      margin-bottom: 8px;
+    }
+    .modal-box .subtitle {
+      font-size: 13px;
+      color: #8bb0d0;
+      margin-bottom: 20px;
+    }
+    .feature-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      text-align: left;
+      margin-bottom: 24px;
+    }
+    .feature-item {
+      background: rgba(12, 30, 58, 0.6);
+      border: 1px solid rgba(0, 180, 255, 0.2);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .feature-item h4 {
+      color: #00f0ff;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+    .feature-item p {
+      font-size: 11px;
+      color: #a0c4e4;
+    }
+    .start-btn-large {
+      width: 100%;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 700;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #0099ff, #0055ff);
+      color: #ffffff;
+      border: 1px solid #00f0ff;
+      cursor: pointer;
+      margin-bottom: 10px;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+  <div id="vr-separator"></div>
+  <div id="vr-alignment-notch"></div>
+
+  <div id="ui-layer">
+    <div class="top-bar interactive">
+      <div class="brand-title">CosmicWeb VR <span>Cardboard Edition</span></div>
+      <div class="controls-cluster">
+        <button class="btn" id="btn-toggle-view"><span id="view-mode-label">Stereo Cardboard</span></button>
+        <button class="btn" id="btn-reseed">New Universe</button>
+        <button class="btn btn-primary" id="btn-fullscreen">Full Screen</button>
+      </div>
+    </div>
+
+    <div class="telemetry-panel" id="telemetry-card">
+      <div class="telemetry-title" id="tel-name">Laniakea Core Attractor</div>
+      <div class="telemetry-grid">
+        <div>Redshift: <strong id="tel-z">z = 0.018</strong></div>
+        <div>Distance: <strong id="tel-dist">250 Mly</strong></div>
+        <div>Mass: <strong id="tel-mass">1.2 × 10¹⁵ M☉</strong></div>
+        <div>Galaxies: <strong id="tel-galaxies">~8,500</strong></div>
+      </div>
+      <div class="telemetry-status" id="tel-status-text">MAINTAIN HEAD POSITION ON TARGET TO WARP</div>
+    </div>
+  </div>
+
+  <div id="start-modal">
+    <div class="modal-box">
+      <h1>CosmicWeb VR</h1>
+      <p class="subtitle">Cardboard-optimized cosmological universe explorer with head position tracking and gaze-dwell maintenance targeting.</p>
+      <div class="feature-list">
+        <div class="feature-item">
+          <h4>🔭 Cosmic Web</h4>
+          <p>42,000+ procedural galaxies, filaments, and superclusters generated in real time.</p>
+        </div>
+        <div class="feature-item">
+          <h4>🎯 Gaze Maintenance</h4>
+          <p>Hold head position steadily on waypoints for 1.5s to confirm and initiate warp jumps.</p>
+        </div>
+        <div class="feature-item">
+          <h4>🥽 Cardboard Stereo</h4>
+          <p>Dual-eye split viewport with 64mm IPD and gyroscope head tracking.</p>
+        </div>
+        <div class="feature-item">
+          <h4>🎵 Generative Audio</h4>
+          <p>Procedural Web Audio sub-bass drones and lock-on frequency sweeps.</p>
+        </div>
+      </div>
+      <button class="start-btn-large" id="btn-enter-cardboard">🚀 Enter Cardboard VR Mode</button>
+      <button class="btn" id="btn-enter-desktop" style="width:100%; justify-content:center;">🖥️ Preview in 360° Desktop Mode</button>
+    </div>
+  </div>
+
+  <script>
+    const CONFIG = {
+      isStereo: true,
+      ipd: 0.064,
+      fov: 75,
+      gazeDwellTime: 1.5,
+      cruiseSpeed: 4.0,
+      universeRadius: 600,
+      nodeCount: 14,
+      filamentParticles: 28000,
+      clusterParticles: 14000,
+      seed: 42
+    };
+
+    let renderer, scene, cameraLeft, cameraRight, cameraMono, headGroup, userRig;
+    let reticleMesh, reticleProgressRing, vrHudMesh, vrHudCanvas, vrHudTexture;
+    let clock = new THREE.Clock();
+    let cosmicNodes = [], interactiveWaypointsGroup = new THREE.Group(), filamentLinesGroup = new THREE.Group();
+    let cosmicFilamentPoints = null, cosmicClusterPoints = null, warpTrailsGroup = new THREE.Group();
+    let floatingDockGroup = new THREE.Group();
+
+    let raycaster = new THREE.Raycaster();
+    let activeTarget = null, dwellProgress = 0.0, isWarping = false, warpProgress = 0.0;
+    let warpStartPos = new THREE.Vector3(), warpTargetPos = new THREE.Vector3(), activeWarpNode = null;
+    let deviceOrientation = { alpha: 0, beta: 0, gamma: 0, available: false };
+    let mouseLook = { isDragging: false, prevX: 0, prevY: 0, yaw: 0, pitch: 0 };
+    let audioCtx = null, masterGain = null, lockOsc = null, lockGain = null;
+
+    function createPRNG(seed) {
+      let s = seed % 2147483647;
+      if (s <= 0) s += 2147483646;
+      return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
+    }
+
+    function initAudio() {
+      if (audioCtx) return;
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContext();
+        masterGain = audioCtx.createGain();
+        masterGain.gain.setValueAtTime(0.7, audioCtx.currentTime);
+        masterGain.connect(audioCtx.destination);
+
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(140, audioCtx.currentTime);
+        filter.connect(masterGain);
+
+        const osc = audioCtx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(48, audioCtx.currentTime);
+        const oscGain = audioCtx.createGain();
+        oscGain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        osc.connect(oscGain);
+        oscGain.connect(filter);
+        osc.start();
+
+        lockOsc = audioCtx.createOscillator();
+        lockOsc.type = 'sawtooth';
+        lockOsc.frequency.setValueAtTime(220, audioCtx.currentTime);
+        const lFilter = audioCtx.createBiquadFilter();
+        lFilter.type = 'bandpass';
+        lFilter.frequency.setValueAtTime(600, audioCtx.currentTime);
+        lockGain = audioCtx.createGain();
+        lockGain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+        lockOsc.connect(lFilter);
+        lFilter.connect(lockGain);
+        lockGain.connect(masterGain);
+        lockOsc.start();
+      } catch (e) {}
+    }
+
+    function playWarpSound() {
+      if (!audioCtx) return;
+      try {
+        const boom = audioCtx.createOscillator();
+        const bGain = audioCtx.createGain();
+        boom.frequency.setValueAtTime(160, audioCtx.currentTime);
+        boom.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 1.2);
+        bGain.gain.setValueAtTime(0.6, audioCtx.currentTime);
+        bGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.3);
+        boom.connect(bGain);
+        bGain.connect(masterGain);
+        boom.start();
+        boom.stop(audioCtx.currentTime + 1.4);
+      } catch (e) {}
+    }
+
+    function init() {
+      scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x000208, 0.0018);
+
+      userRig = new THREE.Group();
+      headGroup = new THREE.Group();
+      userRig.add(headGroup);
+      scene.add(userRig);
+
+      const aspect = (window.innerWidth / 2) / window.innerHeight;
+      cameraLeft = new THREE.PerspectiveCamera(CONFIG.fov, aspect, 0.1, 2000);
+      cameraRight = new THREE.PerspectiveCamera(CONFIG.fov, aspect, 0.1, 2000);
+      cameraMono = new THREE.PerspectiveCamera(CONFIG.fov, window.innerWidth / window.innerHeight, 0.1, 2000);
+
+      updateCameraIPD();
+      headGroup.add(cameraLeft);
+      headGroup.add(cameraRight);
+      headGroup.add(cameraMono);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.autoClear = false;
+      document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+      createGazeReticle();
+      createVRHUD();
+      generateUniverse(CONFIG.seed);
+      createFloatingDocks();
+      createWarpStreaks();
+
+      userRig.position.set(0, 10, 45);
+      setupEvents();
+      updateViewUI();
+    }
+
+    function updateCameraIPD() {
+      const half = CONFIG.ipd / 2;
+      cameraLeft.position.set(-half, 0, 0);
+      cameraRight.position.set(half, 0, 0);
+      cameraLeft.aspect = (window.innerWidth / 2) / window.innerHeight;
+      cameraRight.aspect = (window.innerWidth / 2) / window.innerHeight;
+      cameraLeft.updateProjectionMatrix();
+      cameraRight.updateProjectionMatrix();
+      cameraMono.aspect = window.innerWidth / window.innerHeight;
+      cameraMono.updateProjectionMatrix();
+    }
+
+    function createGazeReticle() {
+      const g = new THREE.Group();
+      g.position.set(0, 0, -5.0);
+
+      reticleMesh = new THREE.Mesh(
+        new THREE.RingGeometry(0.04, 0.055, 32),
+        new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.85, depthTest: false })
+      );
+      g.add(reticleMesh);
+
+      reticleProgressRing = new THREE.Mesh(
+        new THREE.RingGeometry(0.07, 0.09, 48, 1, 0, 0.01),
+        new THREE.MeshBasicMaterial({ color: 0xffb700, transparent: true, opacity: 0.95, depthTest: false })
+      );
+      g.add(reticleProgressRing);
+      headGroup.add(g);
+    }
+
+    function createVRHUD() {
+      vrHudCanvas = document.createElement('canvas');
+      vrHudCanvas.width = 512;
+      vrHudCanvas.height = 256;
+      vrHudTexture = new THREE.CanvasTexture(vrHudCanvas);
+
+      vrHudMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.8, 0.9),
+        new THREE.MeshBasicMaterial({ map: vrHudTexture, transparent: true, opacity: 0.85, depthTest: false })
+      );
+      vrHudMesh.position.set(0, -1.2, -4.2);
+      vrHudMesh.rotation.x = 0.15;
+      headGroup.add(vrHudMesh);
+      updateVRHUD("Laniakea Core Attractor", "z = 0.018", "250 Mly", "1.2 × 10¹⁵ M☉", "~8,500", "EXPLORE // LOOK AT TARGET TO LOCK");
+    }
+
+    function updateVRHUD(name, z, dist, mass, gal, status, prog = 0) {
+      const ctx = vrHudCanvas.getContext('2d');
+      ctx.clearRect(0, 0, 512, 256);
+      ctx.fillStyle = 'rgba(4, 12, 28, 0.85)';
+      ctx.strokeStyle = 'rgba(0, 240, 255, 0.6)';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.roundRect(8, 8, 496, 240, 16);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#00f0ff';
+      ctx.font = 'bold 22px "Segoe UI", sans-serif';
+      ctx.fillText(name.toUpperCase(), 24, 46);
+
+      ctx.fillStyle = '#8bc0f0';
+      ctx.font = '16px monospace';
+      ctx.fillText(`REDSHIFT: ${z} | DIST: ${dist}`, 24, 88);
+      ctx.fillText(`MASS: ${mass} | GALAXIES: ${gal}`, 24, 120);
+
+      if (prog > 0) {
+        ctx.fillStyle = 'rgba(0, 240, 255, 0.2)';
+        ctx.fillRect(24, 145, 464, 18);
+        ctx.fillStyle = '#ffb700';
+        ctx.fillRect(24, 145, 464 * Math.min(prog, 1.0), 18);
+      }
+
+      ctx.fillStyle = prog > 0 ? '#ffcc00' : '#00f0ff';
+      ctx.font = 'bold 15px "Segoe UI", sans-serif';
+      ctx.fillText(status, 24, 195);
+      vrHudTexture.needsUpdate = true;
+    }
+
+    function generateUniverse(seed) {
+      const rng = createPRNG(seed);
+      if (cosmicClusterPoints) scene.remove(cosmicClusterPoints);
+      if (cosmicFilamentPoints) scene.remove(cosmicFilamentPoints);
+      while (filamentLinesGroup.children.length > 0) filamentLinesGroup.remove(filamentLinesGroup.children[0]);
+      while (interactiveWaypointsGroup.children.length > 0) interactiveWaypointsGroup.remove(interactiveWaypointsGroup.children[0]);
+
+      cosmicNodes = [];
+      const nodeData = [
+        { name: "Laniakea Core Attractor", z: "0.018", dist: "250 Mly", mass: "1.2 × 10¹⁵ M☉", gal: "~8,500" },
+        { name: "Perseus-Pisces Supercluster", z: "0.017", dist: "230 Mly", mass: "1.0 × 10¹⁵ M☉", gal: "~7,200" },
+        { name: "Shapley Concentration", z: "0.046", dist: "650 Mly", mass: "1.0 × 10¹⁶ M☉", gal: "~18,000" },
+        { name: "Coma Supercluster", z: "0.023", dist: "320 Mly", mass: "2.1 × 10¹⁵ M☉", gal: "~11,000" },
+        { name: "Hercules-Corona Filament", z: "0.038", dist: "500 Mly", mass: "3.5 × 10¹⁵ M☉", gal: "~9,400" },
+        { name: "Boötes Void Beacon Node", z: "0.052", dist: "700 Mly", mass: "0.4 × 10¹⁴ M☉", gal: "~620" }
+      ];
+
+      for (let i = 0; i < CONFIG.nodeCount; i++) {
+        const theta = rng() * Math.PI * 2, phi = Math.acos(2 * rng() - 1);
+        const r = (0.25 + 0.75 * Math.cbrt(rng())) * CONFIG.universeRadius;
+        const meta = nodeData[i % nodeData.length];
+        const node = {
+          name: meta.name, z: meta.z, dist: meta.dist, mass: meta.mass, gal: meta.gal,
+          position: new THREE.Vector3(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta) * 0.6, r * Math.cos(phi)),
+          conns: []
+        };
+        cosmicNodes.push(node);
+      }
+
+      const curves = [];
+      for (let i = 0; i < cosmicNodes.length; i++) {
+        for (let j = i + 1; j < cosmicNodes.length; j++) {
+          if (cosmicNodes[i].position.distanceTo(cosmicNodes[j].position) < 320) {
+            const mid = new THREE.Vector3().addVectors(cosmicNodes[i].position, cosmicNodes[j].position).multiplyScalar(0.5);
+            mid.add(new THREE.Vector3((rng() - 0.5) * 40, (rng() - 0.5) * 30, (rng() - 0.5) * 40));
+            const c = new THREE.CatmullRomCurve3([cosmicNodes[i].position, mid, cosmicNodes[j].position]);
+            curves.push(c);
+
+            const lGeo = new THREE.BufferGeometry().setFromPoints(c.getPoints(24));
+            const lMat = new THREE.LineBasicMaterial({ color: 0x00a8ff, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending });
+            filamentLinesGroup.add(new THREE.Line(lGeo, lMat));
+          }
+        }
+      }
+      scene.add(filamentLinesGroup);
+
+      const fPos = [], fCol = [];
+      for (let i = 0; i < CONFIG.filamentParticles; i++) {
+        if (!curves.length) break;
+        const c = curves[Math.floor(rng() * curves.length)];
+        const pt = c.getPoint(rng());
+        const rad = Math.pow(rng(), 2) * 20 + 1.5, a = rng() * Math.PI * 2;
+        fPos.push(pt.x + Math.cos(a) * rad, pt.y + Math.sin(a) * rad * 0.7, pt.z + (rng() - 0.5) * rad);
+        fCol.push(0.1 + rng() * 0.3, 0.6 + rng() * 0.4, 0.95);
+      }
+
+      const fGeo = new THREE.BufferGeometry();
+      fGeo.setAttribute('position', new THREE.Float32BufferAttribute(fPos, 3));
+      fGeo.setAttribute('color', new THREE.Float32BufferAttribute(fCol, 3));
+      cosmicFilamentPoints = new THREE.Points(fGeo, new THREE.PointsMaterial({ size: 3.5, vertexColors: true, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending }));
+      scene.add(cosmicFilamentPoints);
+
+      cosmicNodes.forEach((node, idx) => {
+        const wp = new THREE.Group();
+        wp.position.copy(node.position);
+        wp.userData = { type: 'cosmic_node', nodeData: node, radius: 18.0 };
+
+        const core = new THREE.Mesh(new THREE.SphereGeometry(3.5, 12, 12), new THREE.MeshBasicMaterial({ color: 0x00f0ff, wireframe: true, transparent: true, opacity: 0.35 }));
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(8.0, 0.15, 8, 24), new THREE.MeshBasicMaterial({ color: 0x00d0ff, transparent: true, opacity: 0.7 }));
+        wp.add(core);
+        wp.add(ring);
+        interactiveWaypointsGroup.add(wp);
+      });
+      scene.add(interactiveWaypointsGroup);
+    }
+
+    function createFloatingDocks() {
+      const actions = [
+        { label: "WARP: NEXT CLUSTER", act: "next", pos: new THREE.Vector3(-18, 10, -25) },
+        { label: "SEED: REGENERATE", act: "reseed", pos: new THREE.Vector3(18, 10, -25) }
+      ];
+      actions.forEach(a => {
+        const d = new THREE.Group();
+        d.position.copy(a.pos);
+        d.userData = { type: 'action_dock', action: a.act, label: a.label, radius: 5.0 };
+        const box = new THREE.Mesh(new THREE.BoxGeometry(9.0, 3.2, 0.6), new THREE.MeshBasicMaterial({ color: 0x0055aa, wireframe: true, transparent: true, opacity: 0.45 }));
+        d.add(box);
+        floatingDockGroup.add(d);
+      });
+      userRig.add(floatingDockGroup);
+    }
+
+    function createWarpStreaks() {
+      const pos = [];
+      for (let i = 0; i < 200; i++) {
+        const x = (Math.random() - 0.5) * 80, y = (Math.random() - 0.5) * 80, z = (Math.random() - 0.5) * 200;
+        pos.push(x, y, z, x, y, z - 15);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      const mat = new THREE.LineBasicMaterial({ color: 0x80d0ff, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending });
+      const mesh = new THREE.LineSegments(geo, mat);
+      mesh.name = 'warpMesh';
+      warpTrailsGroup.add(mesh);
+      headGroup.add(warpTrailsGroup);
+    }
+
+    function setupEvents() {
+      window.addEventListener('resize', () => {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        updateCameraIPD();
+      });
+      window.addEventListener('deviceorientation', (e) => {
+        if (e.alpha !== null) {
+          deviceOrientation.available = true;
+          deviceOrientation.alpha = e.alpha;
+          deviceOrientation.beta = e.beta;
+          deviceOrientation.gamma = e.gamma;
+        }
+      }, true);
+
+      window.addEventListener('mousedown', (e) => {
+        if (e.target.closest('#ui-layer') && !e.target.closest('.interactive')) return;
+        mouseLook.isDragging = true;
+        mouseLook.prevX = e.clientX;
+        mouseLook.prevY = e.clientY;
+        initAudio();
+      });
+      window.addEventListener('mousemove', (e) => {
+        if (!mouseLook.isDragging) return;
+        mouseLook.yaw -= (e.clientX - mouseLook.prevX) * 0.0035;
+        mouseLook.pitch -= (e.clientY - mouseLook.prevY) * 0.0035;
+        mouseLook.pitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, mouseLook.pitch));
+        mouseLook.prevX = e.clientX;
+        mouseLook.prevY = e.clientY;
+      });
+      window.addEventListener('mouseup', () => { mouseLook.isDragging = false; });
+
+      document.getElementById('btn-toggle-view').addEventListener('click', () => {
+        CONFIG.isStereo = !CONFIG.isStereo;
+        updateViewUI();
+      });
+      document.getElementById('btn-reseed').addEventListener('click', () => {
+        CONFIG.seed = Math.floor(Math.random() * 100000);
+        generateUniverse(CONFIG.seed);
+      });
+      document.getElementById('btn-fullscreen').addEventListener('click', () => {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+        else document.exitFullscreen().catch(() => {});
+      });
+      document.getElementById('btn-enter-cardboard').addEventListener('click', () => {
+        CONFIG.isStereo = true;
+        updateViewUI();
+        initAudio();
+        document.getElementById('start-modal').style.display = 'none';
+      });
+      document.getElementById('btn-enter-desktop').addEventListener('click', () => {
+        CONFIG.isStereo = false;
+        updateViewUI();
+        initAudio();
+        document.getElementById('start-modal').style.display = 'none';
+      });
+    }
+
+    function updateViewUI() {
+      document.getElementById('vr-separator').style.display = CONFIG.isStereo ? 'block' : 'none';
+      document.getElementById('vr-alignment-notch').style.display = CONFIG.isStereo ? 'block' : 'none';
+      document.getElementById('view-mode-label').textContent = CONFIG.isStereo ? 'Stereo Cardboard' : 'Mono 360°';
+    }
+
+    function updateGaze(dt) {
+      if (isWarping) return;
+      const headQuat = new THREE.Quaternion();
+      headGroup.getWorldQuaternion(headQuat);
+      const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(headQuat);
+      const headPos = new THREE.Vector3();
+      headGroup.getWorldPosition(headPos);
+
+      raycaster.set(headPos, forward);
+
+      let found = null, minDist = Infinity;
+      interactiveWaypointsGroup.children.forEach(wp => {
+        const p = new THREE.Vector3();
+        wp.getWorldPosition(p);
+        if (raycaster.ray.intersectsSphere(new THREE.Sphere(p, wp.userData.radius || 18.0))) {
+          const d = headPos.distanceTo(p);
+          if (d < minDist) { minDist = d; found = wp; }
+        }
+      });
+      floatingDockGroup.children.forEach(d => {
+        const p = new THREE.Vector3();
+        d.getWorldPosition(p);
+        if (raycaster.ray.intersectsSphere(new THREE.Sphere(p, d.userData.radius || 5.0))) {
+          const dist = headPos.distanceTo(p);
+          if (dist < minDist) { minDist = dist; found = d; }
+        }
+      });
+
+      if (found) {
+        if (activeTarget !== found) {
+          activeTarget = found;
+          dwellProgress = 0.0;
+        } else {
+          dwellProgress += dt / CONFIG.gazeDwellTime;
+          if (lockGain && audioCtx) {
+            lockOsc.frequency.setValueAtTime(220 + Math.pow(dwellProgress, 2) * 660, audioCtx.currentTime);
+            lockGain.gain.setValueAtTime(0.12 * dwellProgress, audioCtx.currentTime);
+          }
+          if (reticleProgressRing) {
+            reticleProgressRing.geometry.dispose();
+            reticleProgressRing.geometry = new THREE.RingGeometry(0.07, 0.09, 48, 1, 0, Math.max(0.01, Math.min(dwellProgress, 1.0) * Math.PI * 2));
+          }
+          if (activeTarget.userData.type === 'cosmic_node') {
+            const d = activeTarget.userData.nodeData;
+            updateVRHUD(d.name, d.z, d.dist, d.mass, d.gal, `LOCKING... [${Math.floor(dwellProgress * 100)}%]`, dwellProgress);
+          }
+          if (dwellProgress >= 1.0) {
+            if (activeTarget.userData.type === 'cosmic_node') warpTo(activeTarget.userData.nodeData);
+            else if (activeTarget.userData.action === 'reseed') { CONFIG.seed = Math.floor(Math.random() * 10000); generateUniverse(CONFIG.seed); }
+            dwellProgress = 0.0;
+            if (lockGain && audioCtx) lockGain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+          }
+        }
+      } else if (activeTarget) {
+        activeTarget = null;
+        dwellProgress = 0.0;
+        if (lockGain && audioCtx) lockGain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+        if (reticleProgressRing) {
+          reticleProgressRing.geometry.dispose();
+          reticleProgressRing.geometry = new THREE.RingGeometry(0.07, 0.09, 48, 1, 0, 0.01);
+        }
+        updateVRHUD("CosmicWeb Voyager", "Scanning", "Omnidirectional", "Cosmic Grid", "42,000", "EXPLORE // LOOK AT TARGET TO LOCK", 0.0);
+      }
+    }
+
+    function warpTo(node) {
+      isWarping = true;
+      warpProgress = 0.0;
+      warpStartPos.copy(userRig.position);
+      const dir = new THREE.Vector3().subVectors(warpStartPos, node.position).normalize();
+      warpTargetPos.copy(node.position).add(dir.multiplyScalar(45.0));
+      activeWarpNode = node;
+      playWarpSound();
+      const mesh = warpTrailsGroup.getObjectByName('warpMesh');
+      if (mesh) mesh.material.opacity = 0.9;
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = clock.getDelta(), el = clock.getElapsedTime();
+
+      if (deviceOrientation.available) {
+        const euler = new THREE.Euler(
+          THREE.MathUtils.degToRad(deviceOrientation.beta),
+          THREE.MathUtils.degToRad(deviceOrientation.alpha),
+          -THREE.MathUtils.degToRad(deviceOrientation.gamma),
+          'YXZ'
+        );
+        headGroup.quaternion.setFromEuler(euler);
+      } else {
+        headGroup.quaternion.setFromEuler(new THREE.Euler(mouseLook.pitch, mouseLook.yaw, 0, 'YXZ'));
+      }
+
+      if (isWarping) {
+        warpProgress += dt * 0.75;
+        const t = Math.min(1.0, warpProgress);
+        userRig.position.lerpVectors(warpStartPos, warpTargetPos, t * t * (3 - 2 * t));
+        if (warpProgress >= 1.0) {
+          isWarping = false;
+          const mesh = warpTrailsGroup.getObjectByName('warpMesh');
+          if (mesh) mesh.material.opacity = 0.0;
+        }
+      } else {
+        const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(headGroup.quaternion);
+        userRig.position.addScaledVector(fwd, CONFIG.cruiseSpeed * dt);
+      }
+
+      interactiveWaypointsGroup.children.forEach((w, i) => { w.rotation.y = el * 0.4 + i; });
+      updateGaze(dt);
+
+      const w = window.innerWidth, h = window.innerHeight;
+      renderer.clear();
+      if (CONFIG.isStereo) {
+        const hw = Math.floor(w / 2);
+        renderer.setViewport(0, 0, hw, h);
+        renderer.setScissor(0, 0, hw, h);
+        renderer.setScissorTest(true);
+        renderer.render(scene, cameraLeft);
+
+        renderer.setViewport(hw, 0, hw, h);
+        renderer.setScissor(hw, 0, hw, h);
+        renderer.setScissorTest(true);
+        renderer.render(scene, cameraRight);
+      } else {
+        renderer.setViewport(0, 0, w, h);
+        renderer.setScissor(0, 0, w, h);
+        renderer.setScissorTest(false);
+        renderer.render(scene, cameraMono);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', init);
+    window.addEventListener('DOMContentLoaded', animate);
+  </script>
+</body>
+</html>
